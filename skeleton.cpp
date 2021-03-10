@@ -1,8 +1,3 @@
-// ----------------------- OpenPose C++ API Tutorial - Example 3 - Body from image -----------------------
-// It reads an image, process it, and displays it with the pose (and optionally hand and face) keypoints. In addition,
-// it includes all the OpenPose configuration flags (enable/disable hand, face, output saving, etc.).
-
-// Third-party dependencies
 #include <opencv2/opencv.hpp>
 #include "opencv2/objdetect.hpp"
 #include "opencv2/highgui.hpp"
@@ -27,12 +22,11 @@
 // OpenPose dependencies
 #include <openpose/headers.hpp>
 
-
 // window size
 #define WIDTH_WINDOWS 640
 #define HEIGHT_WINDOWS 480
 
-// Face Detection file 
+// Path Face Detection 
 #define OPENCV_CASCADE_FILENAME "haarcascade_frontalface_alt.xml"
 
 // Display
@@ -43,22 +37,24 @@ DEFINE_bool(no_display, false,
 //using namespace std;
 //using namespace cv;
 
-//std::stringstream folderName, strName;
+//Inisialization Global Variable
 int counterImg = 1;
-//std::string filename;
-//std::string strCounter;
 
+int stomatch;
+int rightWrist;
+int leftWrist;
 
 int rightWrist_x1;
 int rightWrist_y1;
 int rightWrist_x2;
 int rightWrist_y2;
-int stomatch;
-int rightWrist;
 
-cv::Mat handCropped;
+int leftWrist_x1;
+int leftWrist_y1;
+int leftWrist_x2;
+int leftWrist_y2;
 
-//save 
+//Save to format .csv
 void writeCSV(std::string filename, cv::Mat& m)
 {
     std::ofstream myfile;
@@ -78,53 +74,69 @@ void display(const std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>>& dat
         {
             
             // Display image
-
-            auto fps = op::getCvCapPropFrameFps();
-
             const cv::Mat cvMat = OP_OP2CVCONSTMAT(datumsPtr->at(0)->cvOutputData);
-            std::cout << "fps = " << fps << std::endl;
-
             if (!cvMat.empty())
             {
                 //cv::imshow(OPEN_POSE_NAME_AND_VERSION + " Openpose", cvMat);
-                //cv::imshow("Openpose", cvMat);
+                cv::imshow("Openpose", cvMat);
+
+                //Get people detection
                 const auto numberPeopleDetected = datumsPtr->at(0)->poseKeypoints.getSize(0);
 
                 std::cout << "People Detected = " << numberPeopleDetected << std::endl;
-  
+
                 if (numberPeopleDetected != 0) {
 
-                    //LEFT HAND
-
-                    /*int pt1x = datumsPtr->at(0)->poseKeypoints[12] + 50;
-                    int pt1y = datumsPtr->at(0)->poseKeypoints[13] + 50;
-                    int pt2x = datumsPtr->at(0)->poseKeypoints[12] - 80;
-                    int pt2y = datumsPtr->at(0)->poseKeypoints[13] - 120;*/
                     const auto opTimerHandDetection = op::getTimerInit();
+                    
+                    //LEFT WRIST
+                    leftWrist_x1 = datumsPtr->at(0)->poseKeypoints[12] + 40;
+                    leftWrist_y1 = datumsPtr->at(0)->poseKeypoints[13] + 40;
+                    leftWrist_x2 = datumsPtr->at(0)->poseKeypoints[12] - 40;
+                    leftWrist_y2 = datumsPtr->at(0)->poseKeypoints[13] - 60;
+                    
                     //RIGHT WRIST
                     rightWrist_x1 = datumsPtr->at(0)->poseKeypoints[21] + 40;
                     rightWrist_y1 = datumsPtr->at(0)->poseKeypoints[22] + 40;
                     rightWrist_x2 = datumsPtr->at(0)->poseKeypoints[21] - 40;
                     rightWrist_y2 = datumsPtr->at(0)->poseKeypoints[22] - 60;
 
-                    stomatch = datumsPtr->at(0)->poseKeypoints[4] + 60;
+                    stomatch = datumsPtr->at(0)->poseKeypoints[4] + 80;
                     rightWrist = datumsPtr->at(0)->poseKeypoints[22];
+                    leftWrist = datumsPtr->at(0)->poseKeypoints[13];
+
                    /* std::cout << "Right Wrist = " << rightWrist << std::endl
                         << "Stomatch =" << stomatch << std::endl;*/
 
                     //std::cout << pt1x << "-" << pt1y << "|" << pt2x << "-" << pt2y << std::endl;
-                    if (rightWrist_y2 > 0 && rightWrist_x2 > 0) {
-                        if (rightWrist_y1 < HEIGHT_WINDOWS && rightWrist_x1 < WIDTH_WINDOWS) {
+
+                    // Boundary Image
+                    if ((rightWrist_y2 > 0 && rightWrist_x2 > 0) && (leftWrist_y2 > 0 && leftWrist_x2 > 0)) {
+                        if ((rightWrist_y1 < HEIGHT_WINDOWS && rightWrist_x1 < WIDTH_WINDOWS) && 
+                            (leftWrist_y1 < HEIGHT_WINDOWS && leftWrist_x1 < WIDTH_WINDOWS)) {
                             //std::cout << rightWrist_x1 << ":" << rightWrist_y1 << "|" << rightWrist_x2 << ":" << rightWrist_y2  << std::endl;
-                            if (stomatch > rightWrist) {
+                            
+                            if (stomatch > rightWrist && stomatch > leftWrist) {
+                                
+                                //Bounding Box Hand Detection
                                 cv::Rect Rec(rightWrist_x2, rightWrist_y2, 80, 80);
+                                cv::Rect Rec1(leftWrist_x2, leftWrist_y2, 80, 80);
                                 cv::rectangle(Img, Rec, cv::Scalar(0, 255, 0), 0, 8, 0);
-                                cv::Mat Roi = Img(Rec);
-                                //cv::Mat handCropped;
-                                cv::resize(Roi, handCropped, cv::Size(64, 64));
+                                cv::rectangle(Img, Rec1, cv::Scalar(0, 255, 0), 0, 8, 0);
+
+                                // Get ROI Image
+                                cv::Mat rightRoi = Img(Rec);
+                                cv::Mat leftRoi = Img(Rec1);
+
+                                //Resize Image 
+                                cv::resize(rightRoi, rightRoi, cv::Size(64, 64));
+                                cv::resize(leftRoi, leftRoi, cv::Size(64, 64));
+
                                 //cv::imshow("Hand Detection", Img);
 
                                 if (counterImg > 0 && counterImg <= 10) {
+
+                                    //path to save hand detection
                                     std::string filename;
                                     std::string strCounter = std::to_string(counterImg);
                                     std::stringstream strName;
@@ -134,20 +146,23 @@ void display(const std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>>& dat
                                     //cv::imshow("Crop", handCropped);
                                     std::cout << filename << std::endl;
                                     //writeCSV(filename, handCropped);
-                                    cv::imwrite(filename, handCropped);
+                                    //cv::imwrite(filename, handCropped);
 
                                     counterImg++;
-
                                 }
                                 else {
                                     counterImg = 1;
                                 }
                             }
                             else {
+
+                                // image can't saved
                                 std::cout << "don't saved" << std::endl;
                                 cv::Rect Rec(rightWrist_x2, rightWrist_y2, 80, 80);
+                                cv::Rect Rec1(leftWrist_x2, leftWrist_y2, 80, 80);
+
                                 cv::rectangle(Img, Rec, cv::Scalar(0, 0, 255), 0, 8, 0);
-                                //cv::Mat Roi = Img(Rec);
+                                cv::rectangle(Img, Rec1, cv::Scalar(0, 0, 255), 0, 8, 0);
                             }
 
                         }
@@ -155,7 +170,6 @@ void display(const std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>>& dat
                     }
                     op::printTime(opTimerHandDetection, "Time Hand Detection : ", " seconds.", op::Priority::High);
                 }
-                //cv::waitKey(0);
             }
             else
                 op::opLog("Empty cv::Mat as output.", op::Priority::High, __LINE__, __FUNCTION__, __FILE__);
@@ -281,94 +295,98 @@ int Openpose()
         op::opLog("Starting thread(s)...", op::Priority::High);
         opWrapper.start();
 
+        // input camera
         cv::VideoCapture webcam;
         webcam.open(CAMERA_DEVICE);
+
+        // set window resolution
         webcam.set(cv::CAP_PROP_FRAME_WIDTH, WIDTH_WINDOWS);
         webcam.set(cv::CAP_PROP_FRAME_HEIGHT, HEIGHT_WINDOWS);
-
 
         if (!webcam.isOpened()) {
             std::cout << "ERROR! unable to open camera" << std::endl;
         }
         cv::Mat frame;
 
-        //Face detection using HAAR CASCADE
+        //Face Detection using HAAR CASCADE
         std::cout << "Face Detection file: ";
         cv::CascadeClassifier face_cascade;
         bool face_xml = face_cascade.load(OPENCV_CASCADE_FILENAME);
-
 
         if (face_xml == 0) {
             std::cerr << "Face xml did not load successfully..." << std::endl;
             return -1;
         }
-        else
+        else {
             std::cout << "Face xml was successfully loaded..." << std::endl;
+        }
         std::vector<cv::Rect> faces;
         cv::Mat frame_gray;
-
         op::Matrix imageToProcess;
+
         while (true) {
             const auto opTimer = op::getTimerInit();
-
+            std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
+            
             webcam.read(frame);
+
             // check if we succeeded
             if (frame.empty()) {
                 std::cerr << "ERROR! blank frame grabbed\n";
                 break;
             }
-            //std::chrono::high_resolution_clock::time_point start_face = std::chrono::high_resolution_clock::now();
-         
+            
             const auto opTimerFaceDetection = op::getTimerInit();
+
+            //face detecmultiscale
             cv::cvtColor(frame, frame_gray, cv::COLOR_BGR2GRAY);
-            face_cascade.detectMultiScale(frame_gray, faces, 2.1, 3, 0, cv::Size(30, 30));
+            face_cascade.detectMultiScale(frame_gray, faces, 2, 3, 0, cv::Size(30, 30));
             std::cout << std::endl;
             op::printTime(opTimerFaceDetection, "Time Face Detection : ", " seconds.", op::Priority::High);
-            //std::chrono::high_resolution_clock::time_point end_face = std::chrono::high_resolution_clock::now();
-            //auto face_ms = std::chrono::duration_cast<std::chrono::milliseconds> (end_face - start_face).count();
+
+            //Bounding box face detection
             for (auto&& feature : faces) {
                 cv::rectangle(frame, feature, cv::Scalar(0, 255, 0), 2);
             }
 
             // show live and wait for a key with timeout long enough to show images
- /*           for (int i = 0; i < faces.size(); i++)
-            {
-                cv::Point center(faces[i].x + faces[i].width * 0.5, faces[i].y + faces[i].height * 0.5);*/
-                if (faces.size() != 0) {
-
-
-                    // Display Face Detected
-                    //cv::ellipse(frame, center, cv::Size(faces[i].width * 0.5, faces[i].height * 0.5), 2, 0, 360, cv::Scalar( 0, 255, 0));
+            if (faces.size() != 0) {
+                // Display Face Detected
                     
-                    const auto opTimerSkeleton = op::getTimerInit();
+                const auto opTimerSkeleton = op::getTimerInit();
 
-                    // Process and display image
-                    imageToProcess = OP_CV2OPCONSTMAT(frame);
-                    auto datumProcessed = opWrapper.emplaceAndPop(imageToProcess);
-                    if (datumProcessed != nullptr)
-                    {
-                        if (!FLAGS_no_display)
-                            display(datumProcessed, frame);
-                    }
-                    else
-                        op::opLog("Image could not be processed.", op::Priority::High);
-
-                    op::printTime(opTimerSkeleton, "Time Skeleton : ", " seconds.", op::Priority::High);
-
+                // Process and display image
+                imageToProcess = OP_CV2OPCONSTMAT(frame);
+                auto datumProcessed = opWrapper.emplaceAndPop(imageToProcess);
+                if (datumProcessed != nullptr)
+                {
+                    if (!FLAGS_no_display)
+                        display(datumProcessed, frame);
                 }
-            //}
+                else {
+                    op::opLog("Image could not be processed.", op::Priority::High);
+                }
+                op::printTime(opTimerSkeleton, "Time Skeleton : ", " seconds.", op::Priority::High);
+            }
+
+            // Measuring total time
+            std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+            auto gpuFps = (1000.0 / std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+            op::printTime(opTimer, "Total time: ", " seconds.", op::Priority::High);
+
+            //add text FPS to window
+            std::stringstream ss;
+            ss << "FPS : " << gpuFps;
+            std::string strFps = ss.str();
+            cv::putText(frame, strFps, cv::Point(10, 40), cv::FONT_HERSHEY_COMPLEX, 0.6, cvScalar(255, 255, 255));
+
             cv::imshow("RGB", frame);
 
-            //std::cout << "Time Face Detection = " << face_ms << std::endl;
-
-            op::printTime(opTimer, "Total time: ", " seconds.", op::Priority::High);
             if (cv::waitKey(5) >= 0) {
                 break;
             }
         }
-        // Measuring total time
       
-
         // Return
         return 0;
     }
@@ -383,6 +401,6 @@ int main(int argc, char* argv[])
     // Parsing command line flags
     //gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-    // Running tutorialApiCpp
+    // Running OpenPose
     return Openpose();
 }
