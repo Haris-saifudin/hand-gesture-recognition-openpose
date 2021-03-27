@@ -17,7 +17,7 @@
 // <- Command-line user interface
 #define OPENPOSE_FLAGS_DISABLE_PRODUCER
 #define OPENPOSE_FLAGS_DISABLE_DISPLAY
-#define CAMERA_DEVICE 1
+#define CAMERA_DEVICE 0
 
 #include <openpose/flags.hpp>
 // <- OpenPose dependencies
@@ -26,6 +26,7 @@
 // <- window size
 #define WIDTH_WINDOWS 640
 #define HEIGHT_WINDOWS 480
+#define RESIZE_RESOLUTION 2
 
 // <- Path Face Detection 
 #define OPENCV_CASCADE_FILENAME "haarcascade_frontalface_alt.xml"
@@ -252,7 +253,8 @@ void display(const std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>>& dat
             if (!cvMat.empty())
             {
                 //cv::imshow(OPEN_POSE_NAME_AND_VERSION + " Openpose", cvMat);
-                cv::imshow("Openpose", cvMat);
+                //cv::imshow("Openpose", cvMat);
+
 
                 // <- Get people detection
                 const auto numberPeopleDetected = datumsPtr->at(0)->poseKeypoints.getSize(0);
@@ -264,20 +266,20 @@ void display(const std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>>& dat
                     const auto opTimerHandDetection = op::getTimerInit();
 
                     // <- LEFT WRIST
-                    leftWrist_x1 = datumsPtr->at(0)->poseKeypoints[12] + 40;
-                    leftWrist_y1 = datumsPtr->at(0)->poseKeypoints[13] + 40;
-                    leftWrist_x2 = datumsPtr->at(0)->poseKeypoints[12] - 40;
-                    leftWrist_y2 = datumsPtr->at(0)->poseKeypoints[13] - 60;
+                    leftWrist_x1 = (datumsPtr->at(0)->poseKeypoints[12] * RESIZE_RESOLUTION) + 40;
+                    leftWrist_y1 = (datumsPtr->at(0)->poseKeypoints[13] * RESIZE_RESOLUTION) + 40;
+                    leftWrist_x2 = (datumsPtr->at(0)->poseKeypoints[12] * RESIZE_RESOLUTION) - 40;
+                    leftWrist_y2 = (datumsPtr->at(0)->poseKeypoints[13] * RESIZE_RESOLUTION) - 80;
 
                     // <- RIGHT WRIST
-                    rightWrist_x1 = datumsPtr->at(0)->poseKeypoints[21] + 40;
-                    rightWrist_y1 = datumsPtr->at(0)->poseKeypoints[22] + 40;
-                    rightWrist_x2 = datumsPtr->at(0)->poseKeypoints[21] - 40;
-                    rightWrist_y2 = datumsPtr->at(0)->poseKeypoints[22] - 60;
+                    rightWrist_x1 = (datumsPtr->at(0)->poseKeypoints[21] * RESIZE_RESOLUTION) + 40;
+                    rightWrist_y1 = (datumsPtr->at(0)->poseKeypoints[22] * RESIZE_RESOLUTION) + 40;
+                    rightWrist_x2 = (datumsPtr->at(0)->poseKeypoints[21] * RESIZE_RESOLUTION) - 40;
+                    rightWrist_y2 = (datumsPtr->at(0)->poseKeypoints[22] * RESIZE_RESOLUTION) - 60;
 
-                    stomatch = datumsPtr->at(0)->poseKeypoints[4] + 80;
-                    rightWrist = datumsPtr->at(0)->poseKeypoints[22];
-                    leftWrist = datumsPtr->at(0)->poseKeypoints[13];
+                    stomatch = (datumsPtr->at(0)->poseKeypoints[4] * RESIZE_RESOLUTION) + 80;
+                    rightWrist = datumsPtr->at(0)->poseKeypoints[22] * RESIZE_RESOLUTION;
+                    leftWrist = datumsPtr->at(0)->poseKeypoints[13] * RESIZE_RESOLUTION;
 
                     /* std::cout << "Right Wrist = " << rightWrist << std::endl
                          << "Stomatch =" << stomatch << std::endl;*/
@@ -517,6 +519,7 @@ int Openpose()
             std::cout << "ERROR! unable to open camera" << std::endl;
         }
         cv::Mat frame;
+        cv::Mat resizeFrame;
 
         // <- Face Detection using HAAR CASCADE
         std::cout << "Face Detection file: ";
@@ -577,15 +580,25 @@ int Openpose()
 
             const auto opTimerFaceDetection = op::getTimerInit();
 
+            cv::resize(frame, resizeFrame, Size(WIDTH_WINDOWS/RESIZE_RESOLUTION, HEIGHT_WINDOWS / RESIZE_RESOLUTION));
             // <- face detecmultiscale
-            cv::cvtColor(frame, frame_gray, cv::COLOR_BGR2GRAY);
-            face_cascade.detectMultiScale(frame_gray, faces, 1.1, 3, 0, cv::Size(30, 30));
+            cv::cvtColor(resizeFrame, frame_gray, cv::COLOR_BGR2GRAY);
+            face_cascade.detectMultiScale(frame_gray, faces, 1.1, 2, 0, cv::Size(30, 30));
             std::cout << std::endl;
             op::printTime(opTimerFaceDetection, "Time Face Detection : ", " seconds.", op::Priority::High);
 
+            cout << frame_gray.rows <<" || " << frame_gray.cols << endl;
             // <- Bounding box face detection
             for (auto&& feature : faces) {
-                cv::rectangle(frame, feature, cv::Scalar(0, 255, 0), 2);
+
+                //cout << feature.x << " || " << feature.y << endl;
+
+                feature.x = feature.x * RESIZE_RESOLUTION;
+                feature.y = feature.y * RESIZE_RESOLUTION;
+                feature.height = feature.height * RESIZE_RESOLUTION;
+                feature.width = feature.width * RESIZE_RESOLUTION;
+                //cout << feature.x << " || " << feature.y << endl;
+                cv::rectangle(frame, feature, cv::Scalar(0, 255, 0), 2);                                
             }
 
             // <- show live and wait for a key with timeout long enough to show images
@@ -595,7 +608,7 @@ int Openpose()
                 const auto opTimerSkeleton = op::getTimerInit();
 
                 // <- Process and display image
-                imageToProcess = OP_CV2OPCONSTMAT(frame);
+                imageToProcess = OP_CV2OPCONSTMAT(resizeFrame);
                 auto datumProcessed = opWrapper.emplaceAndPop(imageToProcess);
                 if (datumProcessed != nullptr)
                 {
@@ -611,6 +624,8 @@ int Openpose()
             else {
                 result = "CAN'T DETECTION";
             }
+            //cv::resize(frame, frame, Size(640, 480));
+
             cv::putText(frame, result, cv::Point(450, 40), cv::FONT_HERSHEY_COMPLEX, 0.6, cvScalar(0, 0, 0));
 
             // <- Measuring total time
@@ -622,8 +637,8 @@ int Openpose()
             std::stringstream ss;
             ss << "FPS : " << gpuFps;
             std::string strFps = ss.str();
-            cv::putText(frame, strFps, cv::Point(10, 40), cv::FONT_HERSHEY_COMPLEX, 0.6, cvScalar(255, 255, 255));
-
+            cv::putText(frame, strFps, cv::Point(10, 40), cv::FONT_HERSHEY_COMPLEX, 0.6, cvScalar(0, 0, 0));
+            cout << "fps : " << gpuFps << endl;
             cv::imshow("RGB", frame);
 
             if ('1' == cv::waitKey(5)) {
@@ -633,11 +648,11 @@ int Openpose()
         svm_free_and_destroy_model(&model);
         free(x);
         free(baris);
-        fclose(input);
-        fclose(output);
+        //fclose(input);
+        //fclose(output);
 
         // Return
-        return 0;
+        //return 1;
     }
     catch (const std::exception&)
     {
@@ -651,5 +666,6 @@ int main(int argc, char* argv[])
     //gflags::ParseCommandLineFlags(&argc, &argv, true);
 
     // Running OpenPose
-    return Openpose();
+    Openpose();
+    return 0;
 }
